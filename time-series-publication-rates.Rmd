@@ -1,0 +1,27 @@
+---
+title: "Timeseries modeling of publication rates"
+author: Erick Lu
+date: "March 29, 2020"
+output:
+  html_document:
+    toc: true
+    df_print: paged
+---
+
+# Introduction
+
+# Data Acquisition
+
+# Data Cleaning
+
+# Time series analysis using Package TSA
+
+# Data Transformation
+
+# ACF and PACF
+
+# Model Diagnostics
+
+# Spectral Analysis
+
+# Conclusion
