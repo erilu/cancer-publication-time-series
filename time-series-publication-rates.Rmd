@@ -1,27 +1,122 @@
 ---
-title: "Timeseries modeling of publication rates"
+title: "The Progress of Cancer Research: Analyzing the Amount of New Scientific Discoveries Published Over Time"
 author: Erick Lu
-date: "March 29, 2020"
+date: "December 6, 2012"
 output:
   html_document:
     toc: true
     df_print: paged
 ---
 
-# Introduction
+# The Question
 
-# Data Acquisition
+Here, I will use ARIMA models to model the amount of scientific papers published in the field of cancer research over time. Modeling the behavior of the academic publication process may provide insight and understanding on the progress of research, as well as reveal the productivity patterns of those who work the field.
 
-# Data Cleaning
+# The Data
 
-# Time series analysis using Package TSA
+The data we will be working with consists of monthly counts of the number of scientific papers published in the field of cancer research from January 1964 to December 2011. The source of the data is PubMed, which is an online database containing scientific articles from peer-reviewed journals in the life sciences. In order to obtain the data, I wrote a [web scraping program](https://github.com/erilu/pubmed-abstract-compiler) in Python that searches PubMed for cancer research articles and downloads the abstracts directly. 2,135,309 abstracts pertaining to cancer research were downloaded, and the month and year of each abstract was extracted into a text file using Python. The number of scientific articles released for each month of each year was used to make the time series. There are a total of 576 equispaced data points.
 
-# Data Transformation
+Abstracts came from 508 peer-reviewed journals. These include journals specifically devoted to cancer research, such as Journal of Clinical Oncology, as well as journals that cover a broad variety of topics pertaining to immunobiology, such as Cell Host and Microbe and PLoS Genetics. Every month, only a fixed amount of articles can be published in any issue of any journal. A fraction of these publications will be in the field of cancer research. Thus, a time series analysis on the number of papers published in the field of cancer over time may yield many interesting conclusions, including when the optimal time of the year to submit a paper might be.
 
-# ACF and PACF
+# Exploratory Data Analysis
 
-# Model Diagnostics
+Figure 1 below is a plot of the raw data, along with a small subsection plotted with monthly symbols. Plot of number of papers published from 1964 to 2011 (top) and from 2000 to 2011 (bottom).
 
-# Spectral Analysis
+```{r}
+library(TSA)
+data <- read.csv("papers_published_per_month.csv", header = T, row.names = 1)
+```
 
-# Conclusion
+```{r}
+complete_ts <- ts(data$count, frequency = 12, start = min(data$year))
+partial_ts <- ts(data[which(data$year>=2005 & data$year<=2010),3], frequency = 12, start =2005)
+
+# Plot the time series
+plot(complete_ts, ylab = "Number of Papers Published", type = "l")
+
+# Zoom in on 2005-2010
+plot(partial_ts, ylab = "Number of Papers Published", type = "l", xlab = "Year")
+points (y = partial_ts, x = time(partial_ts), pch= as.vector(season(partial_ts)), cex = 1.5)
+```
+
+Looking at the plot of the raw data, we observe an increasing trend as well as a seasonal pattern. Values for the number of papers published seem to be lowest in May and November of each year, and highest in the months preceeding them. Explanations for this behavior may be due to decreased produc- tivity during the Summer and Winter holidays, and increased productivity due to PhD students who are pressured to publish before graduating. We can look at the underlying structure of the data in Figure 2. 
+
+```{r}
+plot(stl(complete_ts, "periodic"), xlab = 'Year')
+```
+
+
+Seasonal decomposition of time series by Loess. Graph shows raw data (top), seasonal pattern (second row), trend (third), and residuals (bottom).
+
+The repeating pattern in the second row of Figure 2 verifies the seasonal pattern we observered earlier in the raw data. We can also see that the variance in the residuals greatly increases from 2009 and onward. In order to satisfy the constant variance assumption when fitting ARIMA models, we will apply a transformation to the series to stabilize the variance. A popular technique is the power transformation, introduced by Box and Cox (1964), in which the data, y, is transformed to g(y) = yλ−1 for λ ̸= 0 and log (y) for λ = 0. We may construct a maximum likelihood plot for λ (Figure 3, on next page), in order to determine the order of the power transformation. The maximum likelihood estimate for lambda based on our time series is 0.5, suggesting a square root transformation of the data.
+
+```{r}
+BoxCox.ar(complete_ts,method = 'ols',lambda = seq(0.36,.65,0.01))
+#suggests square root transformation
+```
+
+Maximum likelihood plot for the parameter λ for the Box-Cox transformation.
+
+# Acquiring an approximately stationary series
+
+Now that we have observed the behavior of the data, we will attempt to transform the series into something approximately stationary, in order to be able to satisfy the stationarity required for fitting ARIMA models. In addition to stabilizing the variance with the square root transformation, we will remove the mean level of the process by taking the first difference of the Box-Cox transformed data.
+
+Plot of first difference of the square root of the data over time.
+
+```{r fig.width=10, fig.height=3}
+first_diff_ts <- diff(sqrt(complete_ts))
+plot (first_diff_ts, ylab = "First Difference of Square Root Counts", xlab = "Year")
+abline( h = 0, col = "red")
+```
+
+The time series of the first difference of the square root seems to have zero mean and have roughly constant variance. However, strong seasonality is sill present, as evidenced by the sample autocorrelation function below in Figure 5. This suggests that seasonal differencing may be required to achieve an approximately stationary series. The sample ACF displays a repeating pattern of peaks at multiples of 6.
+
+
+Sample ACF (left) and PACF (right) plots of the first difference of the square root data.
+
+```{r fig.width=10, fig.height=3}
+par(mfrow = c(1,2))
+acf (first_diff_ts, lag.max = 50, main = "")
+pacf (first_diff_ts,lag.max = 50, main = "")
+```
+
+
+This can be explained by the biannual oscillations seen each year in the raw data. However, if we observe the raw data closely, as well as the seasonal decomposition in Figure 2, the two peaks have slightly different behavior, in which values from February to April behave differently than values from August to October. Thus, for future analysis, I will be using a seasonal lag of 12 instead of six, to account for the different behavior. The information we have discovered so far points toward fitting a seasonal ARIMA model to the data. The effects of seasonal differencing (s = 12) are shown in the plots in Figure 6 below:
+
+Plots of first diff. of square root before (far left) and after (right 2) seasonal differencing.
+
+```{r fig.width=10, fig.height=3}
+first_and_seasonal_diff_ts <- diff(diff(sqrt(complete_ts)),lag = 12)
+
+#plot seasonal difference boxplots, then the first and seasonal difference ts
+par(mfrow = c(1,3))
+#boxplots
+years = rep ( seq(1,12,1), 48)
+boxplot ( first_diff_ts ~ years[-1] , xlab = "Month", ylab = "First Difference of Square Root", main = "Before Seasonal Difference")
+boxplot( first_and_seasonal_diff_ts ~ years[-c(1:13)], xlab = "Month", ylab = "First and Seasonal Difference of Square Root", main = "After Seasonal Difference")
+
+plot (first_and_seasonal_diff_ts, ylab = "First and Seasonal Difference of Square Root Counts", xlab = "Year", main = "First and Seasonal Difference")
+abline( h = 0, col = "red")
+```
+
+After taking the seasonal difference of the data with period 12, a plot of the data (far right) looks approximately stationary. Judging by the box plots, the seasonal difference has removed most of the variability between months in the data. However, the sample ACF and PACF of the data after first and
+seasonal differencing shows that seasonal autocorrelation still exists at multiples of lag 12, shown below.
+
+Sample ACF (L) and PACF (R) of the transformed series after first and seasonal differencing.
+
+
+```{r fig.width=10, fig.height=3}
+#plot the acf and pacf
+par(mfrow = c(1,2))
+acf(first_and_seasonal_diff_ts, lag.max = 40, main = "")
+pacf(first_and_seasonal_diff_ts,lag.max = 60, main = "")
+```
+
+
+The sample ACF and PACF of the first and seasonal difference both exhibit significant nonseasonal and seasonal autocorrelation, suggesting that the data behave according to a multiplicative seasonal ARIMA model with period 12. The nonseasonal and seasonal autocorrelation cuts off after 1 and 12 respectively, whereas the nonseasonal and seasonal partial autocorrelation cuts off at lags 3 and 36, respectively.
+
+
+
+# References
+
+Cryer, J.D. and Chan, K. Time Series Analysis With Applications in R. Springer Texts in Statistics. 2008. Hipel KW, et. al. ”Advances in Box-Jenkins Modeling.” Water Resources Research Vol. 13 No. 3. (1977).
