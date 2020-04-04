@@ -4,11 +4,11 @@ data <- read.csv("papers_published_per_month.csv", header = T, row.names = 1)
 
 # plot the time series
 complete_ts <- ts(data$count, frequency = 12, start = min(data$year))
-plot(complete_ts, ylab = "Number of Papers Published", type = "l", xlab = "Year")
+plot(complete_ts, ylab = "Papers Published Per Month", type = "l", xlab = "Year")
 
 # Zoom in on 2005-2010
 partial_ts <- ts(data[which(data$year>=2005 & data$year<=2010),3], frequency = 12, start =2005)
-plot(partial_ts, ylab = "Number of Papers Published", type = "l", xlab = "Year")
+plot(partial_ts, ylab = "Papers Published Per Month", type = "l", xlab = "Year")
 points (y = partial_ts, x = time(partial_ts), pch= as.vector(season(partial_ts)), cex = 1.5)
 
 # plot stl
@@ -59,7 +59,7 @@ detectIO(arima_model)
 final_model = arima(sqrt(complete_ts), order=c(2,1,1), seasonal=list(order=c(2,1,3),period=12), io = c(37, 565))
 
 # analysis of residuals
-TSA::spec(final_model$residuals, main = "Periodogram of Residuals", plot=T)
+TSA::spec(final_model$residuals, main = "Periodogram of Residuals")
 par(mfrow=c(1,2))
 plot(final_model$residuals ~ fitted(final_model), main='Residuals Vs. Fitted', ylab = "Residual", xlab = "Fitted Value")
 abline( h = 3, lty= 'dotted', col = 'blue')
